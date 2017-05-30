@@ -274,7 +274,7 @@ class QuestionAnswerer(BaseModel):
         answers = tf.placeholder(tf.int32, [batch_size])                        
         answer_weights = tf.placeholder(tf.float32, [batch_size])                        
         
-        gru = tf.nn.rnn_cell.GRUCell(dim_hidden)
+        gru = tf.contrib.rnn.GRUCell(dim_hidden)
 
         # Initialize the word embedding
         idx2vec = np.array([self.word_table.word2vec[self.word_table.idx2word[i]] for i in range(num_words)])  
@@ -285,9 +285,9 @@ class QuestionAnswerer(BaseModel):
 
         # Encode the questions
         with tf.variable_scope('Question'):
-            word_list = tf.unpack(questions, axis=1)                                             
+            word_list = tf.unstack(questions, axis=1)                                             
             ques_embed = [tf.nn.embedding_lookup(emb_w, word) for word in word_list]             
-            ques_embed = tf.transpose(tf.pack(ques_embed), [1, 0, 2])   
+            ques_embed = tf.transpose(tf.stack(ques_embed), [1, 0, 2])   
 
             all_states, final_state = tf.nn.dynamic_rnn(gru, ques_embed, dtype=tf.float32)       
 
@@ -296,7 +296,7 @@ class QuestionAnswerer(BaseModel):
                 current_ques_enc = tf.slice(all_states, [k, question_lens[k]-1, 0], [1, 1, dim_hidden]) 
                 question_enc.append(tf.squeeze(current_ques_enc))
 
-            question_enc = tf.pack(question_enc)                                                 
+            question_enc = tf.stack(question_enc)                                                 
            #ques_enc = final_state
 
         # Encode the facts
@@ -306,9 +306,9 @@ class QuestionAnswerer(BaseModel):
                 forward_states, _ = tf.nn.dynamic_rnn(gru, facts, dtype=tf.float32)           
 
             with tf.variable_scope('Backward'):
-                reversed_facts = tf.reverse(facts, [False, True, False])                   
+                reversed_facts = tf.reverse(facts, [1])                   
                 backward_states, _ = tf.nn.dynamic_rnn(gru, reversed_facts, dtype=tf.float32) 
-                backward_states = tf.reverse(backward_states, [False, True, False])              
+                backward_states = tf.reverse(backward_states, [1])              
 
             facts_enc = forward_states + backward_states                                      
 
@@ -325,7 +325,7 @@ class QuestionAnswerer(BaseModel):
                             memory = gru(episode.new_fact(memory), memory)[0]                     
                         else:
                             fact = episode.new_fact(memory)                                        
-                            expanded_memory = tf.concat(1, [memory, fact, question_enc])           
+                            expanded_memory = tf.concat([memory, fact, question_enc], 1)           
                             memory = fully_connected(expanded_memory, dim_hidden, 'EM_fc', group_id=1)
                             memory = batch_norm(memory, 'EM_bn', is_train, bn, 'relu')  
                         scope.reuse_variables()
@@ -338,7 +338,7 @@ class QuestionAnswerer(BaseModel):
                             memory = gru(episode.new_fact(memory), memory)[0]                     
                         else:
                             fact = episode.new_fact(memory)                                        
-                            expanded_memory = tf.concat(1, [memory, fact, question_enc])           
+                            expanded_memory = tf.concat([memory, fact, question_enc], 1)           
                             memory = fully_connected(expanded_memory, dim_hidden, 'EM_fc', group_id=1)
                             memory = batch_norm(memory, 'EM_bn', is_train, bn, 'relu')  
 
@@ -346,7 +346,7 @@ class QuestionAnswerer(BaseModel):
         
         # Compute the result
         with tf.variable_scope('Result'):    
-            expanded_memory = tf.concat(1, [memory, question_enc])    
+            expanded_memory = tf.concat([memory, question_enc], 1)    
             logits = fully_connected(expanded_memory, num_words, 'dec', group_id=1)
             results = tf.argmax(logits, 1)                                                        
             all_probs = tf.nn.softmax(logits)                                                    
@@ -354,7 +354,7 @@ class QuestionAnswerer(BaseModel):
 
         # Compute the loss
         with tf.variable_scope('Loss'):        
-            cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, answers) 
+            cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=answers) 
             loss0 = cross_entropy * answer_weights
             loss0 = tf.reduce_sum(loss0) / tf.reduce_sum(answer_weights)
             if self.train_cnn:

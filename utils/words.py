@@ -1,7 +1,7 @@
 import os
 import json
 import numpy as np
-import cPickle as pickle
+import six.moves.cPickle as pickle
 
 class WordTable():
     def __init__(self, dim_embed, max_sent_len, save_file):

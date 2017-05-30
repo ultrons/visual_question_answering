@@ -2,7 +2,7 @@ import os
 import math
 import numpy as np
 import pandas as pd
-import cPickle as pickle
+import six.moves.cPickle as pickle
 import skimage
 import skimage.io
 
