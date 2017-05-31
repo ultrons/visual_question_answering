@@ -228,21 +228,32 @@ class BaseModel(object):
     def load2(self, data_path, session, ignore_missing=True):
         """ Load a pretrained CNN model. """
         print("Loading CNN model from %s..." %data_path)
-        data_dict = np.load(data_path).item()
-        count = 0
-        miss_count = 0
-        for op_name in data_dict:
-            with tf.variable_scope(op_name, reuse=True):
-                for param_name, data in data_dict[op_name].iteritems():
-                    try:
-                        var = tf.get_variable(param_name)
-                        session.run(var.assign(data))
-                        count += 1
-                       #print("Variable %s:%s loaded" %(op_name, param_name))
-                    except ValueError:
-                        miss_count += 1
-                       #print("Variable %s:%s missed" %(op_name, param_name))
-                        if not ignore_missing:
-                            raise
-        print("%d variables loaded. %d variables missed." %(count, miss_count))
+        with open(data_path, mode='rb') as f:
+          fileContent = f.read()
+        
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(fileContent)
+        session.graph.as_default()
+        tf.import_graph_def(graph_def,name='imported_CNN_model')
+        init = tf.global_variables_initializer()
+        session.run(init)
+        print("graph loaded from disk")
+        
+         #data_dict = np.load(data_path).item()
+         #count = 0
+         #miss_count = 0
+         #for op_name in data_dict:
+         #    with tf.variable_scope(op_name, reuse=True):
+         #        for param_name, data in data_dict[op_name].iteritems():
+         #            try:
+         #                var = tf.get_variable(param_name)
+         #                session.run(var.assign(data))
+         #                count += 1
+         #               #print("Variable %s:%s loaded" %(op_name, param_name))
+         #            except ValueError:
+         #                miss_count += 1
+         #               #print("Variable %s:%s missed" %(op_name, param_name))
+         #                if not ignore_missing:
+         #                    raise
+         #print("%d variables loaded. %d variables missed." %(count, miss_count))
 
