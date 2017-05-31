@@ -65,7 +65,10 @@ def main(argv):
 
     args = parser.parse_args()
 
-    with tf.Session() as sess:
+    config = tf.ConfigProto(allow_soft_placement = True)
+    #config.gpu_options.per_process_gpu_memory_fraction=0.9
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
         # training phase
         if args.phase == 'train':
             train_vqa, train_data = prepare_train_data(args)
