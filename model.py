@@ -6,6 +6,7 @@ import numpy as np
 from base_model import *
 from utils.nn import *
 from episodic_memory import *
+from collections import namedtuple
 
 class QuestionAnswerer(BaseModel):
     def build(self):
@@ -22,6 +23,8 @@ class QuestionAnswerer(BaseModel):
             self.build_resnet50()
         elif self.cnn_model=='resnet101':
             self.build_resnet101()
+        elif self.cnn_model=='resnet_cifar10':
+            self.build_resnet32_cifar10()
         else:
             self.build_resnet152()
         print("CNN part built.")
@@ -149,6 +152,134 @@ class QuestionAnswerer(BaseModel):
 
         self.imgs = imgs
         self.is_train = is_train
+
+######
+
+    # Fundamental Layers
+    def affine (self, x, in_dim, out_dim, name):
+        with tf.variable_scope(name):
+            w = tf.get_variable('DW',
+                [in_dim, out_dim], 
+                initializer=tf.uniform_unit_scaling_initializer(factor=1.0)
+                                #tf.contrib.layers.xavier_initializer()
+            )
+            b = tf.get_variable('biases', 
+                                [out_dim],
+                               initializer=tf.constant_initializer(1, tf.float32)
+                               )
+            return tf.nn.xw_plus_b(x,w,b)
+    
+    def relu (self, x, leakiness=0.0):
+        return tf.where(tf.less(x,0.0), leakiness*x, x, name='leaky_relu')
+    
+    
+    def conv2d (self, x, filter_size, in_filters, out_filters, stride, name):
+        with tf.variable_scope(name):
+            n = filter_size * filter_size * out_filters
+            kernel = tf.get_variable(
+            'DW', [filter_size,filter_size, in_filters, out_filters],
+            initializer=tf.random_normal_initializer(
+                  stddev=np.sqrt(2.0/n))
+            )
+            return tf.nn.conv2d(x, kernel, [1, stride, stride,1], padding='SAME')
+    
+    def global_avg_pool(self, x, name):
+        with tf.variable_scope(name):
+            return tf.reduce_mean(x, [1,2])
+    
+    # Complex Cells
+    def residual (self,x, in_filter, out_filter, stride, name, is_training,
+                  relu_leakiness=0.0, keep_prob=1.0, activate_before_residual=False):
+        with tf.variable_scope(name):
+            if activate_before_residual:
+                with tf.variable_scope("shared_residual_activation"):
+                    x = tf.layers.batch_normalization(x,training=is_training)
+                    x = self.relu(x, relu_leakiness)
+                    orig_x=x
+            else:
+                with tf.variable_scope("residual_only_activation"):
+                    orig_x = x
+                    x = tf.layers.batch_normalization(x,training=is_training)
+                    x = self.relu(x, relu_leakiness)
+            with tf.variable_scope('sub_unit1'):
+                x = self.conv2d(x,3, in_filter, out_filter, stride, "conv3x3")
+            with tf.variable_scope('sub_unit2'):
+                x = tf.layers.batch_normalization(x,training=is_training)
+                x = self.relu(x, relu_leakiness)
+                x = self.conv2d(x,3, out_filter, out_filter, 1, "conv3x3")
+            if keep_prob  < 1.0:
+                x = tf.layers.dropout(x, rate=(1-keep_prob) , training=is_training)
+            with tf.variable_scope('add'):
+                if in_filter != out_filter:
+                    orig_x = tf.nn.avg_pool(orig_x, [1,stride,stride,1], [1,stride,stride,1], 'VALID')
+                    orig_x = tf.pad(
+                        orig_x, [[0, 0], [0, 0], [0, 0],
+                                 [(out_filter-in_filter)//2, (out_filter-in_filter)//2]])
+    
+                x += orig_x
+        return x
+    
+    def residual_unit(self, x, in_filter, out_filter, stride, name, is_training,
+                  relu_leakiness=0.0, keep_prob=1.0, activate_before_residual=False, num_units=5):
+        with tf.variable_scope(name):
+            x = self.residual (x, in_filter, out_filter, stride, "residual_1", is_training,
+                  relu_leakiness, self.hps.keep_prob, activate_before_residual)
+         
+           
+        for i in range(1, num_units):
+            with tf.variable_scope('%s_%d' % (name, i)):
+                x  = self.residual (x, out_filter, out_filter, 1, "residual_1", is_training,
+                  relu_leakiness, self.hps.keep_prob)
+                
+        
+        return x
+
+    def build_resnet32_cifar10(self):
+        HParams= namedtuple('HParams',
+                     'batch_size, num_classes,'
+                     'num_residual_units, weight_decay_rate, '
+                     'relu_leakiness, keep_prob')
+        self.hps = HParams(batch_size=100,
+                             num_classes=10,
+                             num_residual_units=5,
+                             weight_decay_rate=0.0002,
+                             relu_leakiness=0.1,
+                             keep_prob=0.8,
+                             )
+        X = tf.placeholder(tf.float32, [self.batch_size]+self.img_shape, name="x")
+        is_training = tf.placeholder(tf.bool, name="is_training")
+        strides=[1, 2, 2]
+        filters=[16, 16, 32, 64]
+        activate_before_residual = [True, False, False]
+        num_classes=10
+        
+        # 3x3 Convolutional Layer with 16 filters and stride of 1
+        with tf.variable_scope("init"):
+            x = self.conv2d(X, 3, 3, filters[1], strides[0], "CONV_3X3_S1X16")
+            
+        x=self.residual_unit (x, filters[0], filters[1], strides[0], "unit_1", is_training,
+                  self.hps.relu_leakiness, self.hps.keep_prob, activate_before_residual[0], self.hps.num_residual_units)
+        x_int=self.residual_unit (x, filters[1], filters[2], strides[1], "unit_2_", is_training,
+                  self.hps.relu_leakiness, self.hps.keep_prob, activate_before_residual[0], self.hps.num_residual_units)
+        x=self.residual_unit (x_int, filters[2], filters[3], strides[2], "unit_3", is_training,
+                  self.hps.relu_leakiness, self.hps.keep_prob, activate_before_residual[0], self.hps.num_residual_units)
+
+        
+        x_int = max_pool(x_int, 2, 2, 2, 2, 'pool_addo')
+        self.permutation = self.get_permutation(7, 7)
+        #x_int.set_shape([self.batch_size, 7, 7, 2048])
+        x_int = tf.reshape(x_int, [self.batch_size, 7, 7, 2048])
+        x_flat = self.flatten_feats(x_int, 2048)
+        self.conv_feats = x_flat
+        self.conv_feat_shape = [49, 2048]
+
+        self.imgs = X
+        self.is_train = is_training
+        
+
+
+######
+    
 
     def build_resnet101(self):
         """ Build the ResNet101 net. """
