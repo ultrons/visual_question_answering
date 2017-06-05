@@ -79,6 +79,7 @@ class QuestionAnswerer(BaseModel):
 
         self.imgs = imgs
         self.is_train = is_train
+        self.cnn_saver = tf.train.Saver()
 
     def basic_block(self, input_feats, name1, name2, is_train, bn, c, s=2):
         """ A basic block of ResNets. """
@@ -152,6 +153,7 @@ class QuestionAnswerer(BaseModel):
 
         self.imgs = imgs
         self.is_train = is_train
+        self.cnn_saver = tf.train.Saver()
 
 ######
 
@@ -275,8 +277,15 @@ class QuestionAnswerer(BaseModel):
 
         self.imgs = X
         self.is_train = is_training
-        
 
+        # Creating a saver instance just for CNN
+        
+        # Fist create a dictionary of param names: param to pass to the saver instance
+        self.cnn_params = {}
+        for var in tf.trainable_variables():
+            if var.op.name.find(r'DW') > 0:
+                self.cnn_params[var.op.name] = var
+        self.cnn_saver = tf.train.Saver(self.cnn_params)
 
 ######
     
@@ -320,6 +329,7 @@ class QuestionAnswerer(BaseModel):
 
         self.imgs = imgs
         self.is_train = is_train
+        self.cnn_saver = tf.train.Saver()
 
     def build_resnet152(self):
         """ Build the ResNet152 net. """
@@ -360,6 +370,7 @@ class QuestionAnswerer(BaseModel):
 
         self.img_files = img_files
         self.is_train = is_train
+        self.cnn_saver = tf.train.Saver()
 
     def get_permutation(self, height, width):
         """ Get the permutation corresponding to a snake-like walk as decribed by the paper. Used to flatten the convolutional feats. """

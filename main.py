@@ -42,10 +42,10 @@ def main(argv):
     parser.add_argument('--max_ques_len', type=int, default=30, help='Maximum length of the question. Extremely long questions will be ignored')
 
     parser.add_argument('--save_dir', default='./models/', help='Directory to contain the trained model')
-    parser.add_argument('--save_period', type=int, default=1000, help='Period to save the trained model')
+    parser.add_argument('--save_period', type=int, default=10, help='Period to save the trained model')
 
     parser.add_argument('--solver', default='adam', help='Optimizer to use: Can be adam, momentum, rmsprop or sgd') 
-    parser.add_argument('--num_epochs', type=int, default=10, help='Number of training epochs')
+    parser.add_argument('--num_epochs', type=int, default=1, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay')
@@ -79,7 +79,10 @@ def main(argv):
             if args.load:
                 model.load(sess)
             elif args.load_cnn_model:
-                model.load2(args.cnn_model_file, sess)
+                if args.cnn_model == 'vgg16':
+                    model.load2(args.cnn_model_file, sess)
+                else:
+                    model.cnn_saver.restore(sess,args.cnn_model_file) 
 
             model.train(sess, train_vqa, train_data)
 

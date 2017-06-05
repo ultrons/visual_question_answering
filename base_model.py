@@ -53,6 +53,7 @@ class BaseModel(object):
         self.batch_size = params.batch_size if mode=='train' else 1
 
         self.cnn_model = params.cnn_model
+        self.save_cnn_dir = "./tfmodels/updated/%s" %(self.cnn_model)
         self.train_cnn = params.train_cnn
 
         self.save_dir = os.path.join(params.save_dir, self.cnn_model+'/')
@@ -215,6 +216,8 @@ class BaseModel(object):
         """ Save the model. """
         print(("Saving model to %s" %self.save_dir))
         self.saver.save(sess, self.save_dir, self.global_step)
+        m_name=self.cnn_saver.save(sess, self.save_cnn_dir, self.global_step)
+        print("DBG", m_name)
 
     def load(self, sess):
         """ Load the model. """
