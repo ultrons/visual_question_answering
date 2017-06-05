@@ -199,11 +199,11 @@ class BaseModel(object):
             a_words = ['A:'] + [answer]
             ans = ' '.join(a_words)
 
-            img = mpimg.imread(img_file)
-            plt.imshow(img)
-            plt.axis('off')
-            plt.title(ques+'\n'+ans)
-            plt.savefig(os.path.join(result_dir, img_name+'_'+str(test_data.question_ids[k])+'_result.jpg'))
+            #img = mpimg.imread(img_file)
+            #plt.imshow(img)
+            #plt.axis('off')
+            #plt.title(ques+'\n'+ans)
+            #plt.savefig(os.path.join(result_dir, img_name+'_'+str(test_data.question_ids[k])+'_result.jpg'))
 
         # Save the answers to a file
         test_info = pd.read_csv(test_info_file)
@@ -217,7 +217,13 @@ class BaseModel(object):
         print(("Saving model to %s" %self.save_dir))
         self.saver.save(sess, self.save_dir, self.global_step)
         m_name=self.cnn_saver.save(sess, self.save_cnn_dir, self.global_step)
-        print("DBG", m_name)
+        if self.params.save_embed :
+            with tf.variable_scope('embedding', reuse=True):
+                matrix=tf.get_variable('emb_w', [self.word_table.num_words, self.params.dim_embed ])
+                np.save('./embedding_post_training.npy',sess.run(matrix))
+            
+        
+
 
     def load(self, sess):
         """ Load the model. """

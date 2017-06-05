@@ -60,6 +60,7 @@ def main(argv):
     parser.add_argument('--attention', default='soft', help='Attention mechanism: Can be soft or gru')
     parser.add_argument('--init_embed_with_glove', action='store_true', default=False, help='Turn on to initialize the word embedding with the GloVe data')  
     parser.add_argument('--fix_embed_weight', action='store_true', default=False, help='Turn on to fix the word embedding')
+    parser.add_argument('--save_embed', action='store_true', default=False, help='Turn on to fix the word embedding')
     parser.add_argument('--tie_memory_weight', action='store_true', default=False, help='Turn on to tie the memory weights at different time steps')
     parser.add_argument('--class_balancing_factor', type=float, default=0.0, help='Class balancing factor. The larger it is, the model pays more attention to rare words.') 
 

@@ -419,11 +419,12 @@ class QuestionAnswerer(BaseModel):
         gru = tf.contrib.rnn.GRUCell(dim_hidden)
 
         # Initialize the word embedding
-        idx2vec = np.array([self.word_table.word2vec[self.word_table.idx2word[i]] for i in range(num_words)])  
-        if params.fix_embed_weight:
-            emb_w = tf.convert_to_tensor(idx2vec, tf.float32)                       
-        else:
-            emb_w = weight('emb_w', [num_words, dim_embed], init_val=idx2vec, group_id=1)                
+        idx2vec = np.array([self.word_table.word2vec[self.word_table.idx2word[i]] for i in range(num_words)])
+        with tf.variable_scope('embedding'):
+            if params.fix_embed_weight:
+                emb_w = tf.convert_to_tensor(idx2vec, tf.float32)                       
+            else:
+                emb_w = weight('emb_w', [num_words, dim_embed], init_val=idx2vec, group_id=1)
 
         # Encode the questions
         with tf.variable_scope('Question'):
