@@ -48,7 +48,7 @@ class EpisodicMemory:
         else:
             mixed_fact = tf.reduce_sum(self.facts * tf.expand_dims(atts, 2), 1)        
                
-        return mixed_fact                                                                 
+        return mixed_fact, atts                                                                
 
     def attend(self, memory):
         """ Get the attention weights. """

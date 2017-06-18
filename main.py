@@ -76,6 +76,7 @@ def main(argv):
 
             model = QuestionAnswerer(args, 'train')
             sess.run(tf.initialize_all_variables())
+            model.summary_writer.add_graph(sess.graph)
 
             if args.load:
                 model.load(sess)

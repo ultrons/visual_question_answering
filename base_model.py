@@ -8,6 +8,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from tqdm import tqdm
+import skimage.transform
 
 from dataset import *
 from utils.words import *
@@ -88,7 +89,7 @@ class BaseModel(object):
                 if self.train_cnn:
                     # Train CNN and RNN 
                     feed_dict = self.get_feed_dict(batch, is_train=True)
-                    _, loss0, loss1, global_step = sess.run([self.opt_op, self.loss0, self.loss1, self.global_step], feed_dict=feed_dict)
+                    summaries, _, loss0, loss1, global_step = sess.run([self.summaries, self.opt_op, self.loss0, self.loss1, self.global_step], feed_dict=feed_dict)
  
                 else:              
                     # Train RNN only 
@@ -96,9 +97,10 @@ class BaseModel(object):
                     imgs = self.img_loader.load_imgs(img_files)
                     feats = sess.run(self.conv_feats, feed_dict={self.imgs:imgs, self.is_train:False})
                     feed_dict = self.get_feed_dict(batch, is_train=True, feats=feats)
-                    _, loss0, loss1, global_step = sess.run([self.opt_op, self.loss0, self.loss1, self.global_step], feed_dict=feed_dict)
+                    summaries, _, loss0, loss1, global_step = sess.run([self.summaries, self.opt_op, self.loss0, self.loss1, self.global_step], feed_dict=feed_dict)
 
                 print(" Loss0=%f Loss1=%f" %(loss0, loss1))
+                self.summary_writer.add_summary(summaries, global_step)
 
                 if (global_step + 1) % params.save_period == 0:
                     self.save(sess)
@@ -130,6 +132,7 @@ class BaseModel(object):
                 feed_dict = self.get_feed_dict(batch, is_train=False, feats=feats)
 
             result = sess.run(self.results, feed_dict=feed_dict)
+            attention = sess.run(self.attend, feed_dict=feed_dict)
             answer = self.word_table.idx2word[result.squeeze()]
             answers.append({'question_id': val_data.question_ids[k], 'answer': answer})
 
@@ -144,7 +147,20 @@ class BaseModel(object):
             ans = ' '.join(a_words)
 
             img = mpimg.imread(img_file)
+            attention = np.array(attention).reshape(-1,1)[self.get_permutation(14,14)]
+            #attention=attention.squeeze()
+            attention=attention.reshape(14,14)
+            attention_img = skimage.transform.pyramid_expand(attention,
+                    upscale=32, sigma=20)
+            #print(img.shape)
+            #attention_value = pd.DataFrame(attention )
+            #attention_value.to_csv(os.path.join(result_dir,
+            #    img_name+'_'+str(val_data.question_ids[k])+'_result.csv'))
+            #attention_img = skimage.transform.rescale(attention,
+            #        (img.shape[0]/14, img.shape[1]/14))
+
             plt.imshow(img)
+            plt.imshow(attention_img, alpha=0.85)
             plt.axis('off')
             plt.title(ques+'\n'+ans)
             plt.savefig(os.path.join(result_dir, img_name+'_'+str(val_data.question_ids[k])+'_result.jpg'))
